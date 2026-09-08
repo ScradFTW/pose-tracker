@@ -36,19 +36,27 @@
 
         <h2>How it works</h2>
         <p>
-          The skeleton isn't from a third-party pose library. It's a small
-          convolutional net (~700k parameters) that I trained from scratch
-          on the Leeds Sports Pose dataset (Johnson &amp; Everingham, 2010;
-          2,000 labeled images, 14 joints) — no pretrained backbone,
-          no transfer learning. It regresses a heatmap per joint; each webcam
-          frame is resized to 256&times;256, run through the net as ONNX in
-          WebAssembly, and the per-joint peak becomes a keypoint.
+          The skeleton isn't from a third-party pose library. It's a
+          ResNet18-shaped CNN (~15M parameters, random init — no ImageNet
+          pretraining) with a 3-stage deconvolution head, trained from
+          scratch on COCO 2017 keypoints (tens of thousands of labeled
+          people, 17 joints including face points). It regresses a heatmap
+          per joint; each webcam frame is center-cropped to a square, resized
+          to 256&times;256, run through the net as ONNX in WebAssembly, and
+          the per-joint peak becomes a keypoint.
         </p>
         <p>
-          It's honest about its limits: single person, no hands or face, and
-          noticeably rougher than commercial pose libraries trained on
-          datasets orders of magnitude larger. Stand centered, mostly
-          full-body, for the best results.
+          Wrists track hand position, shoulders and hips form the torso, and
+          neck/chest are derived as the shoulder midpoint and the
+          neck-to-hip midpoint — COCO has no keypoint for either, so those
+          two are computed client-side, not predicted by the net.
+        </p>
+        <p>
+          It's honest about its limits: single person, wrist position rather
+          than finger articulation, and still rougher than commercial pose
+          libraries trained on datasets and compute far beyond what this was
+          trained with. Stand centered, mostly full-body, for the best
+          results.
         </p>
 
         <h2>Model</h2>

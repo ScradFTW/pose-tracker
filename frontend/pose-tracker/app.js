@@ -1,16 +1,23 @@
 const IMG_SIZE = 256;
 const HEATMAP_SIZE = 64;
 const HEATMAP_STRIDE = IMG_SIZE / HEATMAP_SIZE;
-const NUM_JOINTS = 14;
+const NUM_JOINTS = 17;
 
-// Must match train/dataset.py SKELETON exactly.
+// Indices 0-16 are the model's raw COCO outputs. 17 (neck) and 18 (chest)
+// aren't predicted by the model -- COCO has no such keypoints -- they're
+// derived client-side as the shoulder midpoint and the neck/hip midpoint,
+// same trick OpenPose's COCO+neck variant uses.
+const NECK = 17;
+const CHEST = 18;
 const SKELETON = [
-  [0, 1], [1, 2], [2, 3], [3, 4], [4, 5],
-  [2, 8], [3, 9],
-  [8, 9],
-  [8, 7], [7, 6], [9, 10], [10, 11],
-  [8, 12], [9, 12], [12, 13],
+  [15, 13], [13, 11], [16, 14], [14, 12],       // legs
+  [11, CHEST], [12, CHEST],                      // hips to chest
+  [CHEST, NECK],                                 // chest to neck
+  [NECK, 5], [NECK, 6],                          // neck to shoulders
+  [5, 7], [7, 9], [6, 8], [8, 10],               // arms to hands (wrists)
+  [NECK, 0], [0, 1], [0, 2], [1, 3], [2, 4],     // neck to head/face
 ];
+const FACE_JOINTS = new Set([0, 1, 2, 3, 4]); // nose, eyes, ears -- drawn smaller
 
 const video = document.getElementById("webcam");
 const canvas = document.getElementById("overlay");
@@ -29,8 +36,8 @@ const statLandmarks = document.getElementById("stat-landmarks");
 const statParams = document.getElementById("stat-params");
 const statPck = document.getElementById("stat-pck");
 
-statParams.textContent = "705,774";
-statPck.textContent = "0.48";
+statParams.textContent = "15,376,721";
+statPck.textContent = "0.93";
 
 let session = null;
 let running = false;
@@ -38,11 +45,17 @@ let rafId = null;
 
 const fpsWindow = [];
 
-// Offscreen canvas used to resize the video frame to the model's 256x256 input.
+// Offscreen canvas used to crop+resize the video frame to the model's
+// 256x256 square input (center-cropped to match the person-centered square
+// crops the model was trained on).
 const inputCanvas = document.createElement("canvas");
 inputCanvas.width = IMG_SIZE;
 inputCanvas.height = IMG_SIZE;
 const inputCtx = inputCanvas.getContext("2d", { willReadFrequently: true });
+
+let cropSide = 0;
+let cropOffsetX = 0;
+let cropOffsetY = 0;
 
 applyMirror();
 mirrorToggle.addEventListener("change", applyMirror);
@@ -57,7 +70,8 @@ async function loadModel() {
   engineBadge.textContent = "loading model…";
   engineBadge.className = "badge";
 
-  ort.env.wasm.numThreads = 1;
+  const cores = navigator.hardwareConcurrency || 4;
+  ort.env.wasm.numThreads = Math.min(cores, 8);
   ort.env.wasm.simd = true;
 
   session = await ort.InferenceSession.create("./vendor/pose_net.onnx", {
@@ -96,6 +110,10 @@ async function ensureCamera() {
   });
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
+
+  cropSide = Math.min(video.videoWidth, video.videoHeight);
+  cropOffsetX = (video.videoWidth - cropSide) / 2;
+  cropOffsetY = (video.videoHeight - cropSide) / 2;
 }
 
 function reportError(err) {
@@ -114,7 +132,11 @@ function start() {
 }
 
 function preprocess() {
-  inputCtx.drawImage(video, 0, 0, IMG_SIZE, IMG_SIZE);
+  inputCtx.drawImage(
+    video,
+    cropOffsetX, cropOffsetY, cropSide, cropSide,
+    0, 0, IMG_SIZE, IMG_SIZE,
+  );
   const { data } = inputCtx.getImageData(0, 0, IMG_SIZE, IMG_SIZE);
 
   const chw = new Float32Array(3 * IMG_SIZE * IMG_SIZE);
@@ -149,6 +171,7 @@ function decodeHeatmaps(heatmapTensor) {
         }
       }
     }
+    // Position within the square crop, normalized [0, 1].
     keypoints.push({
       x: (bx * HEATMAP_STRIDE) / IMG_SIZE,
       y: (by * HEATMAP_STRIDE) / IMG_SIZE,
@@ -190,9 +213,25 @@ async function loop() {
 }
 
 function drawSkeleton(keypoints) {
-  const w = canvas.width;
-  const h = canvas.height;
-  const pts = keypoints.map((kp) => ({ x: kp.x * w, y: kp.y * h, score: kp.score }));
+  // Map from normalized crop-space back into the full video frame (the
+  // canvas covers the whole frame, but the model only saw the center
+  // square crop).
+  const pts = keypoints.map((kp) => ({
+    x: cropOffsetX + kp.x * cropSide,
+    y: cropOffsetY + kp.y * cropSide,
+    score: kp.score,
+  }));
+
+  // Derived neck (17) and chest (18) -- see the SKELETON comment above.
+  const midpoint = (a, b) => ({
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+    score: Math.min(a.score, b.score),
+  });
+  const neck = midpoint(pts[5], pts[6]);
+  const midHip = midpoint(pts[11], pts[12]);
+  pts[NECK] = neck;
+  pts[CHEST] = midpoint(neck, midHip);
 
   const CONFIDENT = 0.05; // heatmap peak threshold below which a joint is treated as not-found
 
@@ -210,11 +249,12 @@ function drawSkeleton(keypoints) {
 
   if (pointsToggle.checked) {
     ctx.fillStyle = "#ff6ad5";
-    for (const p of pts) {
-      if (p.score < CONFIDENT) continue;
+    pts.forEach((p, j) => {
+      if (p.score < CONFIDENT) return;
+      const r = FACE_JOINTS.has(j) ? 2.5 : 4;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
-    }
+    });
   }
 }

@@ -1,0 +1,33 @@
+Pose-tracker: from-scratch ResNet18-style heatmap CNN on COCO keypoints
+========================================================================
+
+Dataset: COCO 2017 person_keypoints -- 124,823 train / 5,647 val instances
+Note: PCK@0.2 here is normalized by the crop box size (a simplified
+proxy), not official COCO OKS -- not directly comparable to papers.
+Model: ResNet18-shaped backbone (random init) + 3-stage deconv head
+Model params: 15,376,721
+Epochs planned: 35 (cosine LR schedule, T_max=35)
+Epochs actually run: 8 -- stopped manually once gains clearly plateaued
+  relative to the ~9 min/epoch cost; the checkpoint below is the best-val
+  snapshot, saved automatically whenever val PCK improved.
+Training time: ~69 min on NVIDIA GeForce RTX 3060 Laptop GPU
+Best val PCK@0.2 (bbox-normalized): 0.932 (epoch 8)
+
+Per-epoch log (epoch, train_loss, train_pck, val_loss, val_pck, seconds):
+  1  15.19745  0.450  11.99714  0.726  510
+  2   9.87765  0.795   8.34743  0.862  516
+  3   7.77231  0.873   7.02565  0.900  518
+  4   6.81832  0.900   6.57732  0.903  518
+  5   6.33429  0.913   6.01344  0.922  517
+  6   6.01757  0.921   5.82868  0.928  517
+  7   5.79818  0.926   5.86251  0.922  513
+  8   5.62618  0.930   5.55922  0.932  514
+
+For comparison, the earlier LSP-trained model (train/dataset.py,
+train/model.py, 705,774 params, 2,000 images) reached val PCK@0.2 = 0.476
+after the full 150-epoch run and had clearly started overfitting (train
+PCK 0.90 vs val PCK 0.44 by the end). COCO's ~70x larger instance count
+kept train/val PCK close together throughout (no overfitting gap observed
+in 8 epochs), suggesting there was still headroom left in the unused 27
+epochs of the cosine schedule -- this was a deliberate time/quality
+tradeoff, not a quality ceiling.
