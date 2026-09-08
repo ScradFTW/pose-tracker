@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Motion Tracker — Real-Time Pose Estimation</title>
+<meta name="description" content="Real-time skeletal tracking in the browser using your webcam, powered by a small CNN trained from scratch. All inference runs locally on-device." />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/ai/">&larr; AI demos</a>
+    <h1>Motion Tracker</h1>
+    <span class="badge" id="engine-badge">loading model&hellip;</span>
+  </header>
+
+  <main>
+    <section class="stage">
+      <div class="video-wrap">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="stage-overlay" id="stage-message">
+          <button id="start-btn" class="start-btn">Enable camera</button>
+          <p class="hint">Runs fully on-device. Nothing is uploaded or recorded.</p>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <h2>Live stats</h2>
+        <dl class="stats">
+          <div><dt>Inference</dt><dd id="stat-infer">–</dd></div>
+          <div><dt>End-to-end</dt><dd id="stat-e2e">–</dd></div>
+          <div><dt>FPS</dt><dd id="stat-fps">–</dd></div>
+          <div><dt>Joints</dt><dd id="stat-landmarks">–</dd></div>
+        </dl>
+
+        <h2>How it works</h2>
+        <p>
+          The skeleton isn't from a third-party pose library. It's a small
+          convolutional net (~700k parameters) that I trained from scratch
+          on the Leeds Sports Pose dataset (Johnson &amp; Everingham, 2010;
+          2,000 labeled images, 14 joints) — no pretrained backbone,
+          no transfer learning. It regresses a heatmap per joint; each webcam
+          frame is resized to 256&times;256, run through the net as ONNX in
+          WebAssembly, and the per-joint peak becomes a keypoint.
+        </p>
+        <p>
+          It's honest about its limits: single person, no hands or face, and
+          noticeably rougher than commercial pose libraries trained on
+          datasets orders of magnitude larger. Stand centered, mostly
+          full-body, for the best results.
+        </p>
+
+        <h2>Model</h2>
+        <dl class="stats">
+          <div><dt>Params</dt><dd id="stat-params">–</dd></div>
+          <div><dt>Val PCK@0.2</dt><dd id="stat-pck">–</dd></div>
+        </dl>
+
+        <h2>Options</h2>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-mirror" checked />
+          Mirror view
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-skeleton" checked />
+          Draw skeleton
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-points" checked />
+          Draw joints
+        </label>
+      </aside>
+    </section>
+  </main>
+
+  <footer>
+    <p>All processing happens locally in your browser. Video is never transmitted or stored.</p>
+  </footer>
+
+  <script src="vendor/ort.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+venv/
+data/
+__pycache__/
+*.pyc
+train/*.pt
+train/train.log
+frontend/pose-tracker/vendor/ort*
+frontend/pose-tracker/vendor/*.wasm
+frontend/pose-tracker/vendor/*.mjs
