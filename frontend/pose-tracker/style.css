@@ -175,6 +175,53 @@ main {
   cursor: pointer;
 }
 
+.breakdown {
+  margin-top: 2rem;
+}
+
+.breakdown-toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.breakdown-toggle:hover { filter: brightness(1.15); }
+
+.breakdown-panel {
+  margin-top: 0.75rem;
+}
+.breakdown-panel.hidden { display: none; }
+
+.breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin: 0;
+}
+.breakdown-list dt {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.breakdown-list dd {
+  margin: 0.3rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+.breakdown-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
 footer {
   text-align: center;
   color: var(--muted);

@@ -60,6 +60,14 @@ let cropOffsetY = 0;
 applyMirror();
 mirrorToggle.addEventListener("change", applyMirror);
 
+const breakdownToggle = document.getElementById("breakdown-toggle");
+const breakdownPanel = document.getElementById("breakdown-panel");
+const breakdownCaret = document.getElementById("breakdown-caret");
+breakdownToggle.addEventListener("click", () => {
+  const open = breakdownPanel.classList.toggle("hidden") === false;
+  breakdownCaret.textContent = open ? "▾" : "▸";
+});
+
 function applyMirror() {
   const mirrored = mirrorToggle.checked;
   video.classList.toggle("mirrored", mirrored);

@@ -80,6 +80,101 @@
         </label>
       </aside>
     </section>
+
+    <section class="breakdown">
+      <button class="breakdown-toggle" id="breakdown-toggle">
+        How this is built <span id="breakdown-caret">&#9656;</span>
+      </button>
+      <div class="panel breakdown-panel hidden" id="breakdown-panel">
+        <dl class="breakdown-list">
+          <div>
+            <dt>Data</dt>
+            <dd>
+              COCO 2017 <code>person_keypoints</code> annotations, filtered to
+              instances with &ge;5 labeled joints and a reasonable box size,
+              then cropped <em>per person</em> rather than resizing whole
+              images — one photo with 3 people yields 3 training crops.
+              124,823 crops came from ~45k images; only the images actually
+              needed were downloaded individually (a few GB), not the full
+              18GB archive.
+            </dd>
+          </div>
+          <div>
+            <dt>Augmentation</dt>
+            <dd>
+              Random horizontal flip — with left/right joint labels swapped,
+              since flipping without relabeling teaches the model "left
+              shoulder" means whatever ended up on the right — plus random
+              crop scale/position jitter and brightness/contrast jitter.
+              Training-only.
+            </dd>
+          </div>
+          <div>
+            <dt>Targets</dt>
+            <dd>
+              Each joint's ground truth is a 64&times;64 Gaussian heatmap
+              (&sigma;=2), not a raw (x, y) coordinate. Heatmap regression
+              trains far more stably than direct coordinate regression —
+              every nearby pixel gets a gradient instead of only the one
+              exact target pixel.
+            </dd>
+          </div>
+          <div>
+            <dt>Model</dt>
+            <dd>
+              A ResNet18-shaped backbone (4 residual stages, random init, no
+              ImageNet pretraining) feeding a 3-stage transposed-convolution
+              head that upsamples back to 64&times;64. 15.4M parameters,
+              every one trained from scratch on this dataset — no
+              pretrained weights anywhere in the pipeline.
+            </dd>
+          </div>
+          <div>
+            <dt>Loss &amp; training</dt>
+            <dd>
+              Masked MSE between predicted and target heatmaps — joints with
+              no ground truth in a given crop don't contribute to the loss.
+              Adam with a cosine learning-rate schedule; only the
+              best-validation-PCK checkpoint is kept. Reached val PCK@0.2 =
+              0.93 in 8 epochs (~70 min on an RTX 3060) and was stopped there
+              once gains clearly plateaued, well short of the full 35-epoch
+              schedule.
+            </dd>
+          </div>
+          <div>
+            <dt>Export</dt>
+            <dd>
+              PyTorch &rarr; ONNX via <code>torch.onnx.export</code>, then
+              checked for byte-for-byte parity between ONNX Runtime's output
+              and the original PyTorch model on the same input before
+              shipping it.
+            </dd>
+          </div>
+          <div>
+            <dt>Client inference</dt>
+            <dd>
+              Runs entirely in your browser via <code>onnxruntime-web</code>:
+              the webcam frame is center-cropped to a square, resized to
+              256&times;256, packed into a float32 tensor, and run through
+              the model in WebAssembly — multi-threaded via
+              <code>SharedArrayBuffer</code> (needs the
+              Cross-Origin-Opener/Embedder-Policy headers this page sends),
+              which cut inference from ~255ms to ~47ms on a multi-core
+              machine. Each joint's position is just the argmax pixel of its
+              predicted heatmap.
+            </dd>
+          </div>
+          <div>
+            <dt>Derived points</dt>
+            <dd>
+              Neck and chest aren't model outputs — COCO has no such
+              keypoints — they're computed client-side as the shoulder
+              midpoint and the neck-to-hip midpoint.
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </section>
   </main>
 
   <footer>
