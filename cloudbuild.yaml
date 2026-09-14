@@ -1,6 +1,33 @@
 # Deploys on every push to main — see bradjobe-dev-infra's
 # cloudbuild_triggers.tf (google_cloudbuild_trigger.app["pose-tracker"]).
 steps:
+  # onnxruntime-web's runtime isn't committed to git (see fetch-vendor.sh)
+  # and pose_net.onnx (61MB, committed) can't go through Cloud Run at all
+  # (32MB response size limit, confirmed for real) — both get uploaded
+  # straight to the GCS backend bucket bradjobe-dev-infra provisions,
+  # under object keys that match the URL path exactly
+  # (pose-tracker/vendor/... serves /pose-tracker/vendor/...).
+  - id: fetch-and-upload-vendor
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    dir: frontend/pose-tracker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        # Fetches the npm tarball directly instead of running
+        # fetch-vendor.sh's `npm pack` — this image has gcloud, not node,
+        # and there's no reason to need both just to unpack one tarball.
+        curl -fsSL -o /tmp/ort.tgz \
+          https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.19.2.tgz
+        tar xzf /tmp/ort.tgz -C /tmp
+        gcloud storage cp \
+          /tmp/package/dist/ort.min.js \
+          /tmp/package/dist/ort-wasm-simd-threaded.wasm \
+          /tmp/package/dist/ort-wasm-simd-threaded.mjs \
+          vendor/pose_net.onnx \
+          "gs://${_VENDOR_BUCKET}/pose-tracker/vendor/" \
+          --cache-control="public, max-age=31536000, immutable"
+
   - id: build
     name: gcr.io/cloud-builders/docker
     args:
@@ -29,6 +56,9 @@ steps:
 substitutions:
   _REGION: northamerica-northeast1
   _ARTIFACT_REGISTRY: northamerica-northeast1-docker.pkg.dev/bradjobe-dev/apps
+  # Must match bradjobe-dev-infra's pose_tracker_assets.tf bucket name
+  # (google_storage_bucket.pose_tracker_vendor: "${var.project_id}-pose-tracker-vendor").
+  _VENDOR_BUCKET: bradjobe-dev-pose-tracker-vendor
 
 options:
   logging: CLOUD_LOGGING_ONLY
