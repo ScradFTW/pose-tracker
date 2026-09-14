@@ -156,11 +156,10 @@
               Runs entirely in your browser via <code>onnxruntime-web</code>:
               the webcam frame is center-cropped to a square, resized to
               256&times;256, packed into a float32 tensor, and run through
-              the model in WebAssembly — multi-threaded via
-              <code>SharedArrayBuffer</code> (needs the
-              Cross-Origin-Opener/Embedder-Policy headers this page sends),
-              which cut inference from ~255ms to ~47ms on a multi-core
-              machine. Each joint's position is just the argmax pixel of its
+              the model in WebAssembly with SIMD, single-threaded on the
+              main thread — this model is small enough that the added
+              complexity of a multi-threaded worker pool isn't worth it.
+              Each joint's position is just the argmax pixel of its
               predicted heatmap.
             </dd>
           </div>

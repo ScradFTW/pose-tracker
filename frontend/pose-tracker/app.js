@@ -78,8 +78,15 @@ async function loadModel() {
   engineBadge.textContent = "loading model…";
   engineBadge.className = "badge";
 
-  const cores = navigator.hardwareConcurrency || 4;
-  ort.env.wasm.numThreads = Math.min(cores, 8);
+  // Multi-threaded WASM (numThreads > 1) spawns a pool of Web Workers and
+  // waits on all of them during InferenceSession.create() -- on some
+  // browser/environment combinations that pool init silently deadlocks
+  // with zero console output (no error, no rejection, just a promise that
+  // never settles). Single-threaded avoids that whole code path: the
+  // model still runs entirely in WASM/SIMD on the main thread, just
+  // without the worker pool. This one small model doesn't need the
+  // parallelism enough to be worth the risk.
+  ort.env.wasm.numThreads = 1;
   ort.env.wasm.simd = true;
 
   session = await ort.InferenceSession.create("./vendor/pose_net.onnx", {
