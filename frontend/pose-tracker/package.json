@@ -1,0 +1,9 @@
+{
+  "name": "pose-tracker-frontend",
+  "private": true,
+  "type": "module",
+  "description": "Static frontend for pose-tracker. No build step, no runtime dependencies -- pose-math.js is plain, dependency-free JS shipped as-is. This package.json exists only to mark the directory as ES modules (for app.js's/pose-math.js's `import`/`export`) and to give the test suite a name.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

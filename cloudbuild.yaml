@@ -1,6 +1,16 @@
 # Deploys on every push to main — see bradjobe-dev-infra's
 # cloudbuild_triggers.tf (google_cloudbuild_trigger.app["pose-tracker"]).
 steps:
+  # Runs pose-math.js's unit tests (node:test, zero dependencies) so a
+  # regression in the decode/crop/tensor-packing math fails the build
+  # before anything gets built or deployed.
+  - id: test-frontend
+    name: node:20-slim
+    dir: frontend/pose-tracker
+    entrypoint: node
+    args:
+      - --test
+
   # onnxruntime-web's runtime isn't committed to git (see fetch-vendor.sh)
   # and pose_net.onnx (61MB, committed) can't go through Cloud Run at all
   # (32MB response size limit, confirmed for real) — both get uploaded

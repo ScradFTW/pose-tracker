@@ -1,7 +1,12 @@
-const IMG_SIZE = 256;
-const HEATMAP_SIZE = 64;
-const HEATMAP_STRIDE = IMG_SIZE / HEATMAP_SIZE;
-const NUM_JOINTS = 17;
+import {
+  IMG_SIZE,
+  NUM_JOINTS,
+  decodeHeatmaps,
+  computeCenterCrop,
+  imageDataToCHW,
+  mapKeypointsToFrame,
+  deriveNeckAndChest,
+} from "./pose-math.js";
 
 // Indices 0-16 are the model's raw COCO outputs. 17 (neck) and 18 (chest)
 // aren't predicted by the model -- COCO has no such keypoints -- they're
@@ -126,9 +131,10 @@ async function ensureCamera() {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
-  cropSide = Math.min(video.videoWidth, video.videoHeight);
-  cropOffsetX = (video.videoWidth - cropSide) / 2;
-  cropOffsetY = (video.videoHeight - cropSide) / 2;
+  const crop = computeCenterCrop(video.videoWidth, video.videoHeight);
+  cropSide = crop.side;
+  cropOffsetX = crop.offsetX;
+  cropOffsetY = crop.offsetY;
 }
 
 function reportError(err) {
@@ -153,47 +159,8 @@ function preprocess() {
     0, 0, IMG_SIZE, IMG_SIZE,
   );
   const { data } = inputCtx.getImageData(0, 0, IMG_SIZE, IMG_SIZE);
-
-  const chw = new Float32Array(3 * IMG_SIZE * IMG_SIZE);
-  const plane = IMG_SIZE * IMG_SIZE;
-  for (let i = 0; i < plane; i++) {
-    const r = data[i * 4] / 255;
-    const g = data[i * 4 + 1] / 255;
-    const b = data[i * 4 + 2] / 255;
-    chw[i] = (r - 0.5) / 0.5;
-    chw[plane + i] = (g - 0.5) / 0.5;
-    chw[plane * 2 + i] = (b - 0.5) / 0.5;
-  }
+  const chw = imageDataToCHW(data);
   return new ort.Tensor("float32", chw, [1, 3, IMG_SIZE, IMG_SIZE]);
-}
-
-function decodeHeatmaps(heatmapTensor) {
-  const data = heatmapTensor.data;
-  const plane = HEATMAP_SIZE * HEATMAP_SIZE;
-  const keypoints = [];
-  for (let j = 0; j < NUM_JOINTS; j++) {
-    let best = -Infinity;
-    let bx = 0;
-    let by = 0;
-    const offset = j * plane;
-    for (let y = 0; y < HEATMAP_SIZE; y++) {
-      for (let x = 0; x < HEATMAP_SIZE; x++) {
-        const v = data[offset + y * HEATMAP_SIZE + x];
-        if (v > best) {
-          best = v;
-          bx = x;
-          by = y;
-        }
-      }
-    }
-    // Position within the square crop, normalized [0, 1].
-    keypoints.push({
-      x: (bx * HEATMAP_STRIDE) / IMG_SIZE,
-      y: (by * HEATMAP_STRIDE) / IMG_SIZE,
-      score: best,
-    });
-  }
-  return keypoints;
 }
 
 async function loop() {
@@ -206,7 +173,7 @@ async function loop() {
   const results = await session.run({ input: inputTensor });
   const inferMs = performance.now() - inferStart;
 
-  const keypoints = decodeHeatmaps(results.heatmaps);
+  const keypoints = decodeHeatmaps(results.heatmaps.data);
 
   ctx.save();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -231,22 +198,12 @@ function drawSkeleton(keypoints) {
   // Map from normalized crop-space back into the full video frame (the
   // canvas covers the whole frame, but the model only saw the center
   // square crop).
-  const pts = keypoints.map((kp) => ({
-    x: cropOffsetX + kp.x * cropSide,
-    y: cropOffsetY + kp.y * cropSide,
-    score: kp.score,
-  }));
+  const pts = mapKeypointsToFrame(keypoints, cropOffsetX, cropOffsetY, cropSide);
 
   // Derived neck (17) and chest (18) -- see the SKELETON comment above.
-  const midpoint = (a, b) => ({
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2,
-    score: Math.min(a.score, b.score),
-  });
-  const neck = midpoint(pts[5], pts[6]);
-  const midHip = midpoint(pts[11], pts[12]);
+  const { neck, chest } = deriveNeckAndChest(pts, 5, 6, 11, 12);
   pts[NECK] = neck;
-  pts[CHEST] = midpoint(neck, midHip);
+  pts[CHEST] = chest;
 
   const CONFIDENT = 0.05; // heatmap peak threshold below which a joint is treated as not-found
 

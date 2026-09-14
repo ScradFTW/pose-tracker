@@ -18,7 +18,7 @@ FROM nginx:1.27-alpine
 # the URL prefix itself, same as ai-hub/ai-tools already do. All of this
 # app's own asset references are relative (checked directly), so this
 # needed no HTML/JS changes.
-COPY frontend/pose-tracker/index.html frontend/pose-tracker/app.js frontend/pose-tracker/style.css /usr/share/nginx/html/pose-tracker/
+COPY frontend/pose-tracker/index.html frontend/pose-tracker/app.js frontend/pose-tracker/pose-math.js frontend/pose-tracker/style.css /usr/share/nginx/html/pose-tracker/
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080
