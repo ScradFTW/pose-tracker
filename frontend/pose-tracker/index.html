@@ -171,6 +171,30 @@
               midpoint and the neck-to-hip midpoint.
             </dd>
           </div>
+          <div>
+            <dt>Reproduce it</dt>
+            <dd>
+              The exact commands used to prepare the data, train, and
+              export this model — no hidden steps:
+              <pre><code>python3 -m venv venv &amp;&amp; source venv/bin/activate
+pip install torch torchvision onnx onnxruntime scipy numpy pillow huggingface_hub tqdm requests
+
+# annotations + only the images that actually contain labeled people
+mkdir -p data/coco &amp;&amp; cd data/coco
+curl -sL -o annotations.zip http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+unzip -o annotations.zip "annotations/person_keypoints_*" &amp;&amp; rm annotations.zip
+cd ../..
+python train/prepare_coco.py
+
+python train/train_coco.py       # 8 epochs run, ~9 min/epoch on an RTX 3060 Laptop GPU
+python train/export_onnx_coco.py # writes frontend/pose-tracker/vendor/pose_net.onnx
+python train/check_quality.py    # sanity-check grid of predictions vs. ground truth</code></pre>
+              Full source — data prep, model, training loop, ONNX export,
+              and the per-epoch training log — is in
+              <a href="https://github.com/ScradFTW/pose-tracker/tree/main/train" target="_blank" rel="noopener">train/</a>
+              in the repo.
+            </dd>
+          </div>
         </dl>
       </div>
     </section>

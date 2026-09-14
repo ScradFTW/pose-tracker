@@ -5,8 +5,8 @@ demo, the pose model here is trained from scratch: a ResNet18-shaped
 convolutional heatmap-regression net (~15.4M parameters, random init --
 no ImageNet pretraining), trained on COCO 2017 person keypoints
 (~125k person instances, 17 joints). Exported to ONNX and run entirely
-client-side via `onnxruntime-web` (WASM, multi-threaded via
-SharedArrayBuffer) -- no server, no GPU required, no video ever leaves
+client-side via `onnxruntime-web` (WASM+SIMD, single-threaded -- see the
+threading note below) -- no server, no GPU required, no video ever leaves
 the browser.
 
 Live at `https://bradjobe.dev/pose-tracker/`.
@@ -59,11 +59,13 @@ python train/check_quality.py         # sanity-check grid, saved to /tmp
 cd frontend/pose-tracker && ./fetch-vendor.sh   # pulls onnxruntime-web
 ```
 
-Then serve `frontend/pose-tracker/` as static files. The page needs
-`Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp` response headers (see the
-nginx config on the server) for multi-threaded WASM -- without them it
-still works, just single-threaded and ~5x slower.
+Then serve `frontend/pose-tracker/` as static files. `app.js` forces
+`ort.env.wasm.numThreads = 1` -- onnxruntime-web's multi-threaded worker
+pool init deadlocked with zero console output on some browser/environment
+combinations, and this model is small enough that single-threaded WASM+SIMD
+is fast enough on its own. The COOP/COEP headers (see nginx.conf) are kept
+regardless since they don't hurt and may matter if threading is ever
+revisited.
 
 ## Honest limitations
 
